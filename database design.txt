@@ -1,0 +1,15 @@
+food recipe [ name, description, author, category, ingredients, instructions, cooking time, steps]
+ingredients [ name ],
+recipe properties [ total cooking time, no of ingredients, difficulty(beginner, intermediate, professional), recipe]
+user [ name, email, phone, photo, user type(beginner, intermediate, pro), veg or non-veg  ]
+
+rating and review [ rating, comments ]
+category,
+favourites [ recipe id, user id ]
+recipe images [ recipe id, image ]
+
+
+
+
+
+
