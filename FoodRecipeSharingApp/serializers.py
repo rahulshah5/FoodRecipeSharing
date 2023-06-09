@@ -3,10 +3,38 @@ from FoodRecipeSharingApp.models import *
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
-class UserSerializer(serializers.ModelSerializer):
+class UserRegisterSerializer(serializers.ModelSerializer):
+    password2=serializers.CharField(style={'input_type':'password'},write_only=True)
     class Meta:
         model=User
-        fields=("username",)
+        fields=['full_name','email','gender','password','password2']
+        extra_kwargs={
+            'password':{'write_only':True}
+        }
+    
+    def validate(self, attrs):
+        pass1=attrs.get('password')
+        pass2=attrs.get('password2')
+        if pass1 != pass2:
+            raise serializers.ValidationError("Password and confirm password doesn't match")
+        return attrs
+    
+    def create(self,validate_data):
+        return User.objects.create_user(**validate_data)
+    
+
+
+class UserLoginSerializer(serializers.HyperlinkedModelSerializer):
+    email=serializers.EmailField(max_length=255)
+    class Meta:
+        model=User
+        fields=["email",'password']
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=User
+        fields=['email','full_name','gender']
 
 class RecipeStepSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
@@ -23,8 +51,6 @@ class RecipeSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model=Recipe
         fields=('title','author','category','ingredients','cooking_time','difficulty_level','tags','recipeImage')
-
-
 
 
 class CategorySerializer(serializers.HyperlinkedModelSerializer):

@@ -8,8 +8,16 @@ category,
 favourites [ recipe id, user id ]
 recipe images [ recipe id, image ]
 
-
-
-
+Todo
+user registration
+login and authentication
+profile
+view Recipes
+post Recipes:
+    select category 
+    enter ingredients
+    enter other recipe info
+give review and rating 
+add favourites
 
 

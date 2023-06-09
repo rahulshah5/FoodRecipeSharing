@@ -4,7 +4,7 @@ from django.db import models
 
 
 class CustomUserManager(BaseUserManager):
-    def create_user(self, email, full_name, password=None,password2=None):
+    def create_user(self, email, full_name,gender, password=None,password2=None):
 
         if not email:
             raise ValueError("Users must have an email address")
@@ -12,17 +12,19 @@ class CustomUserManager(BaseUserManager):
         user = self.model(
             email=self.normalize_email(email),
             full_name=full_name,
+            gender=gender
         )
 
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, full_name, password=None,password2=None):
+    def create_superuser(self, email, full_name,gender, password=None):
         user = self.create_user(
             email,
             password=password,
             full_name=full_name,
+            gender=gender
         )
         user.is_admin = True
         user.save(using=self._db)
@@ -30,8 +32,11 @@ class CustomUserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser):
+    gender_choices=(('male','male'),('female','female'),('other','other'))
+
     email = models.EmailField(verbose_name="email address", max_length=255, unique=True,)
     full_name=models.CharField(max_length=200)
+    gender=models.CharField(choices=gender_choices,default=None,max_length=10)
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     created_at=models.DateTimeField(auto_now_add=True)
@@ -39,8 +44,9 @@ class User(AbstractBaseUser):
 
     objects = CustomUserManager()
 
+   
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["full_name"]
+    REQUIRED_FIELDS = ["full_name",'gender','password']
 
     def __str__(self):
         return self.email
@@ -62,6 +68,11 @@ class User(AbstractBaseUser):
         return self.is_admin
 
 
+class TokenBlacklist(models.Model):
+    token = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class Category(models.Model):
     name = models.CharField(max_length=100)
 
@@ -81,8 +92,6 @@ class Recipe(models.Model):
     tags = models.ManyToManyField('Tag')
     average_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
     total_ratings = models.PositiveIntegerField(default=0)
-
-
 
 
 class RecipeStep(models.Model):
