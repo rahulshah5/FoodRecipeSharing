@@ -1,7 +1,7 @@
 food recipe [ name, description, author, category, ingredients, instructions, cooking time, steps]
 ingredients [ name ],
 recipe properties [ total cooking time, no of ingredients, difficulty(beginner, intermediate, professional), recipe]
-user [ name, email, phone, photo, user type(beginner, intermediate, pro), veg or non-veg  ]
+user [ name, email, phone, photo, user type (beginner, intermediate, pro), veg or non-veg  ]
 
 rating and review [ rating, comments ]
 category,
@@ -9,15 +9,22 @@ favourites [ recipe id, user id ]
 recipe images [ recipe id, image ]
 
 Todo
-user registration
-login and authentication
-profile
-view Recipes
+
+user registration   (done)
+login and authentication    (done)
+profile     (done)
+view Recipes    (done)
+
+
 post Recipes:
-    select category 
-    enter ingredients
-    enter other recipe info
+    select category - done
+    enter ingredients - done
+    enter other recipe info- done
+    image- 
+
 give review and rating 
 add favourites
+logout
+algorithm
 
 

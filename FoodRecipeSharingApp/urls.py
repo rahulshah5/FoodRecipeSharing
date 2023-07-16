@@ -10,7 +10,7 @@ router.register(r'category',CategoryViewset)
 router.register(r'rating',RatingViewset)
 router.register(r'recipe-step',RecipeStepViewSet)
 router.register(r'review',ReviewViewset)
-router.register(r'favourite',FavouriteViewset)
+router.register(r'favourite',FavouriteViewset,basename='favourite')
 
 
 urlpatterns = [
@@ -19,6 +19,7 @@ urlpatterns = [
     path('login/',UserLoginViewSet.as_view(),name='login'),
     path('logout/',UserLogoutView.as_view(),name='logout'),
     path('profile/',UserProfileView.as_view(),name="profile"),
+    path('post-recipe/',RecipePostView.as_view(),name="Post Recipe"),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]

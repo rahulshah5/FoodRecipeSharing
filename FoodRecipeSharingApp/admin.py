@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from .models import *
+from django.contrib.admin.views.main import ChangeList
 # Register your models here.
 class UserCreationForm(forms.ModelForm):
     """A form for creating new users. Includes all the required
@@ -78,4 +79,33 @@ class UserAdmin(BaseUserAdmin):
     filter_horizontal = ()
 
 
+class RecipeAdmin(admin.ModelAdmin):
+    exclude=['average_rating']
+    filter_horizontal=['ingredients','tags']
+    list_display=['title','author','category']
+
+
+class RecipeStepAdmin(admin.ModelAdmin):
+    list_display=['recipe_name','step_number']
+
+
+
+class FavouriteAdmin(admin.ModelAdmin):
+    list_display=['recipe','user']
+
+class RatingAdmin(admin.ModelAdmin):
+    list_display=['user','recipe','rating']
+
+class ReviewAdmin(admin.ModelAdmin):
+    list_display=['user','recipe']
+
 admin.site.register(User, UserAdmin)
+admin.site.register(Recipe,RecipeAdmin)
+admin.site.register(RecipeStep,RecipeStepAdmin)
+admin.site.register(Category)
+admin.site.register(Ingredient)
+admin.site.register(Tag)
+admin.site.register(Favourite,FavouriteAdmin)
+admin.site.register(RecipeImage)
+admin.site.register(Rating,RatingAdmin)
+admin.site.register(Review,ReviewAdmin)
