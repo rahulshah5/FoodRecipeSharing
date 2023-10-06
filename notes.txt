@@ -27,4 +27,19 @@ add favourites
 logout
 algorithm
 
+urls and their response
 
+/api/recipe - all Recipes  (done)
+/api/category - all Category  (done)
+/api/register - user registration   (done)
+/api/login - user login  (done)
+/api/logout - user logout  (done)
+/api/profile - logged in user profile   (done)
+/api/post-recipe - post recipe   (done)
+/api/post-recipe-steps - post recipe steps  (done)
+/api/post-recipe-image  -  post recipe image   (done) but cannot update yet
+/api/search/ - search recipes (done)
+/api/rating - all rating of single recipe  (done)
+/api/review - all Review of single recipe (done)
+/api/recipe-step - recipe steps of recipe  
+/api/favourite - favourites of user  (done)

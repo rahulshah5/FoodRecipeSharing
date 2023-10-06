@@ -108,12 +108,12 @@ class Recipe(models.Model):
 
 class RecipeStep(models.Model):
     recipe_name = models.ForeignKey(Recipe, on_delete=models.CASCADE)
-    step_number = models.IntegerField()
+    step_number = models.IntegerField(unique=True)
     description = models.TextField()
     time_in_minutes = models.PositiveIntegerField()
 
     def __str__(self) -> str:
-        return self.recipe_name+' '+self.step_number
+        return self.recipe_name.title
 
 class Tag(models.Model):
     name = models.CharField(max_length=100)
@@ -124,7 +124,7 @@ class Tag(models.Model):
 class Rating(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    rating = models.DecimalField(max_digits=5, decimal_places=2)
+    rating = models.DecimalField(max_digits=2, decimal_places=1)
 
 class Review(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
@@ -136,13 +136,13 @@ class Favourite(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def __str__(self):
-        return self.user +" "+self.recipe
+        return f"{self.user} - {self.recipe}"
 
 class RecipeImage(models.Model):
-    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
+    recipe = models.OneToOneField(Recipe, on_delete=models.CASCADE)
     image = models.ImageField(upload_to='recipe_images/')
 
     def __str__(self):
-        return self.recipe
+        return self.recipe.title
 
 

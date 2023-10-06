@@ -33,27 +33,41 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model=User
         fields=['email','full_name','gender']
 
-class RecipeStepSerializer(serializers.HyperlinkedModelSerializer):
+class RecipeStepSerializer(serializers.ModelSerializer):
     class Meta:
         model=RecipeStep
         fields="__all__"
 
-class RecipeImageSerializer(serializers.HyperlinkedModelSerializer):
+
+class RecipeImageSerializer(serializers.ModelSerializer):
     class Meta:
         model=RecipeImage
-        fields=('image',)
+        fields="__all__"
+
+
 
 class RecipeSerializer(serializers.ModelSerializer):
-    recipeImage=RecipeImageSerializer()
     
+    ingredient_names = serializers.SerializerMethodField()
+    tags_name=serializers.SerializerMethodField()
+    author_name=serializers.SerializerMethodField()
     class Meta:
         model=Recipe
-        fields=('title','author','category','ingredients','cooking_time','difficulty_level','tags','recipeImage','description')
+        fields=["id","title","ingredient_names","cooking_time","description","difficulty_level","author","tags_name","author_name"]
+
+    def get_tags_name(self,obj):
+        return [tags.name for tags in obj.tags.all()]
+
+    def get_ingredient_names(self, obj):
+        return [ingredient.name for ingredient in obj.ingredients.all()]
+
+    def get_author_name(self, obj):
+        return obj.author.full_name
 
     def validate(self, attrs):
         title=attrs.get('title')
         difficultyLevel=attrs.get('difficulty_level')
-        recipeImg=attrs.get('recipeImage')
+        tags=attrs.get("tags")
         category=attrs.get('category')
         ingredients=attrs.get('ingredients')
         description=attrs.get('description')
@@ -62,16 +76,19 @@ class RecipeSerializer(serializers.ModelSerializer):
             return serializers.ValidationError("Recipe Title is required")
         elif difficultyLevel is None: 
             return serializers.ValidationError("Difficulty level is required")
-        elif recipeImg is None:
-            return serializers.ValidationError("Recipe Image is required")
+    
         elif category is None:
             return serializers.ValidationError("Category is required")
         elif ingredients is None:
             return serializers.ValidationError("Ingredients is required")
         elif description is None:
             return serializers.ValidationError("Description is required")
+        elif tags is None:
+            return serializers.ValidationError("Tags are required")
+        else:
+            return attrs
 
-class CategorySerializer(serializers.HyperlinkedModelSerializer):
+class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model=Category
         fields="__all__"
@@ -81,16 +98,15 @@ class RatingSerializer(serializers.ModelSerializer):
         model=Rating
         fields="__all__"
 
-class ReviewSerializer(serializers.HyperlinkedModelSerializer):
+class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model=Review
         fields="__all__"
 
-class FavouriteSerializer(serializers.HyperlinkedModelSerializer):
+class FavouriteSerializer(serializers.ModelSerializer):
     class Meta:
         model=Favourite
-        exclude=['user']
-        
+        fields="__all__"  
 
 class IngredientSerializer(serializers.ModelSerializer):
     class Meta:
@@ -105,3 +121,7 @@ class IngredientSerializer(serializers.ModelSerializer):
 
 
         
+class TagSerializer(serializers.ModelSerializer):
+    class meta:
+        model=Tag
+        fields="__all__"
