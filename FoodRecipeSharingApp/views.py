@@ -1,17 +1,22 @@
 
 from rest_framework import viewsets,status,generics
-from FoodRecipeSharingApp.models import Recipe, Category,Rating,Review,Favourite
+from rest_framework.generics import ListAPIView
 from FoodRecipeSharingApp.serializers import *
 from django.contrib.auth import get_user_model, authenticate
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import permissions
-from rest_framework.decorators import permission_classes
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.decorators import permission_classes,authentication_classes
 from rest_framework_simplejwt.tokens import RefreshToken
 from FoodRecipeSharingApp.renderers import UserRenderer
 from django.db.models import Q
-
+from FoodRecipeSharingApp.models import *
+from rest_framework.parsers import MultiPartParser
+from django.http import QueryDict
+from rest_framework import viewsets
+from rest_framework.filters import SearchFilter
+from .collaborative_filtering_algorithm import recommend_recipes
 
 User = get_user_model()
 
@@ -23,7 +28,6 @@ def get_tokens_for_user(user):
         'access': str(refresh.access_token),
     }
 
-
 class UserRegisterViewSet(APIView):
     renderer_classes=[UserRenderer]
     def post(self, request):
@@ -32,8 +36,22 @@ class UserRegisterViewSet(APIView):
             user=serializer.save()
             token=get_tokens_for_user(user)
             return Response({'msg':'User succesfully registered!','token':token},status=status.HTTP_200_OK)
-        return Response(serializers.errors,status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializers.errors)
+    
+    @permission_classes([IsAuthenticated])
+    @authentication_classes([TokenAuthentication])
+    def patch(self, request):
+        # Get the current user
+        user = request.user  # Assuming the user is authenticated
 
+        # Use UserRegisterSerializer with instance=user to update the user details
+        serializer = UserRegisterSerializer(instance=user, data=request.data, partial=True)
+
+        if serializer.is_valid(raise_exception=True):
+            serializer.save()
+            return Response({'msg': 'User details updated successfully!'}, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UserLoginViewSet(APIView):
     renderer_classes=[UserRenderer]
@@ -44,12 +62,12 @@ class UserLoginViewSet(APIView):
             password=serializers.data.get('password')
             user=authenticate(email=email,password=password)
             if user is not None:
+                print(user)
                 token=get_tokens_for_user(user)
                 return Response({'msg':'login success','token':token},status=status.HTTP_200_OK)
             else:
                 return Response({'errors':{'non_field_errors':'email or password is not valid'}},status=status.HTTP_404_NOT_FOUND)
         return Response(serializers.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class UserLogoutView(APIView):
     renderer_classes=[UserRenderer]
@@ -67,35 +85,89 @@ class UserLogoutView(APIView):
             return Response({'msg':"token unidentified"},status=status.HTTP_400_BAD_REQUEST)
 
 
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    
+    def post(self, request, *args, **kwargs):
+        serializer = ChangePasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user
+            old_password = serializer.validated_data.get('oldpassword')
+            new_password = serializer.validated_data.get('password')
+
+            # Check if the old password matches
+            if not user.check_password(old_password):
+                return Response({'detail': 'Old password is incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Set the new password
+            user.set_password(new_password)
+            user.save()
+            return Response({'detail': 'Password changed successfully.'}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class UserProfileView(APIView):
     renderer_classes=[UserRenderer]
     permission_classes=[IsAuthenticated]
     def get(self, request):
         serializers=UserProfileSerializer(request.user)
-        return Response(serializers.data,status=status.HTTP_200_OK)
+        userid=request.user.id
+        user_recipe=Recipe.objects.filter(author=userid)
+        ud=RecipeSerializer(user_recipe,many=True)
+        
+        res={
+            'user':serializers.data,
+            'recipes':ud.data
+        }
+        return Response(res,status=status.HTTP_200_OK)
       
 # ALL RECIPES
 class RecipeViewset(viewsets.ModelViewSet):
-    allowed_methods=['get']
-    queryset=Recipe.objects.all()
-    serializer_class=RecipeSerializer
+    allowed_methods = ['get','delete']
+    serializer_class = RecipeSerializer
+    filter_backends = [SearchFilter]
+    search_fields = ['category__id']  # Define the field for filtering
+    
+    def get_queryset(self):
+        category_id = self.request.query_params.get('category_id')  # Get the category ID from query parameters
+        queryset = Recipe.objects.all()
+
+        if category_id:
+            queryset = queryset.filter(category__id=category_id)  # Filter recipes by category ID
+        
+        return queryset
+    
+    # @authentication_classes([TokenAuthentication])
+    # @permission_classes([IsAuthenticated])
+    # def destroy(self, request, *args, **kwargs):
+    #     instance = self.get_object()
+        
+    #     # Check permissions here if needed
+    #     if not self.request.user.is_authenticated or self.request.user != instance.author:
+    #         return Response({"error": "You do not have permission to delete this recipe."},
+    #                         status=status.HTTP_403_FORBIDDEN)
+    #     print(instance)
+    #     self.perform_destroy(instance)
+    #     return Response({"msg": "Recipe deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
 
 # POST RECIPES
 class RecipePostView(APIView):
     allowed_methods=['post','patch']
     renderer_classes=[UserRenderer]
-    permission_classes=[IsAuthenticated]
+    parser_classes=(MultiPartParser,)
 
-
+    @authentication_classes([TokenAuthentication])
+    @permission_classes([IsAuthenticated])
     def post(self,request):
         userid=request.user.id
-        serializer=RecipeSerializer(data=request.data)
         request.data["author"]=userid
-
+        print(request.data)
+        qd=request.data
+        
         # getting data's of foreign field data
-        categoryName=request.data['category']
-        ingredientName=request.data['ingredients']
-        tagsName=request.data['tags']
+        categoryName=request.data.get('category')
+        ingredientName = qd.getlist('ingredients[]')
+        tagsName = qd.getlist('tags[]')
+
 
         # retriving pk for category
         category_queryset=Category.objects.filter(name=categoryName.lower())
@@ -108,47 +180,68 @@ class RecipePostView(APIView):
 
         # uppercase
         ingredientName=[x.upper() for x in ingredientName]
-        print(ingredientName)
 
         # retriving pk for ingredient and adding it to list
         for ing in ingredientName:          
             qset,created=Ingredient.objects.get_or_create(name=ing)    
             ingId.append(qset.pk)
-           
-                
 
-        print(ingId)
 
         # retriving pk for ingredient and adding it to list   
         for tg in tagsName:
             qset,created=Tag.objects.get_or_create(name=tg)
             tagID.append(qset.pk)
 
-        
-        print(tagID)
-
-        # setting id's for serializer
-        request.data['tags']=tagID
-        request.data['category']=categoryId
-        request.data['ingredients']=ingId
+        recipe_image = request.data.get('image')
+        recipe_image_id = RecipeImage(image=recipe_image)
+        recipe_image_id.save()
 
 
+        initial_values = {
+            'title': 'test',
+            'description': 'test',
+            'author':'0',
+            'category': 'dinner',
+            'ingredients': ['2', '3'],
+            'cooking_time': '34',
+            'difficulty_level': 'Easy',
+            'tags': ['2', '3'],
+            # Include other variables as needed
+        }
+
+        # Create new QueryDict 
+        data = QueryDict('', mutable=True)
+        data.update(initial_values)
+
+        # Update specific values
+        data['title'] = request.data.get('title')  
+        data['description'] = request.data.get('description')  
+        data['cooking_time'] = request.data.get('cooking_time')  
+        data['difficulty_level'] = request.data.get('difficulty_level')  
+        data['category'] = categoryId  
+        data.setlist('tags', tagID)  
+        data.setlist('ingredients', ingId)
+        data['author']=userid
+        data['image']=recipe_image_id.id
+
+        serializer=RecipeSerializer(data=data)
 
         # validation 
         if serializer.is_valid():
             data=serializer.save()
-            return Response({'msg':'Recipe Succesfully posted',"data":RecipeSerializer(data).data},status=status.HTTP_201_CREATED)
+            data=serializer.data
+            return Response({'msg':'Recipe Succesfully posted',"data":data},status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors,status=status.HTTP_406_NOT_ACCEPTABLE)
           
 # VIEW CATEGORY
-class CategoryViewset(viewsets.ReadOnlyModelViewSet):
+class CategoryViewset(viewsets.ModelViewSet):
     queryset=Category.objects.all()
     serializer_class=CategorySerializer
 
 # VIEW AND POST RATING
 class RatingViewset(viewsets.ModelViewSet):
-    permission_classes=[IsAuthenticated]
+    
     serializer_class=RatingSerializer
 
     def get_queryset(self):
@@ -157,10 +250,9 @@ class RatingViewset(viewsets.ModelViewSet):
         queryset = Rating.objects.filter(recipe_id=recipe_id)
         return queryset
     
+    @permission_classes([IsAuthenticated])
     def create(self, request, *args, **kwargs):
-        # if not request.user.is_authenticated:
-        #     return Response({"error":"user is not authenticated"})
-
+    
         serializer=RatingSerializer(data=request.data)
         user=request.user.id
         request.data['user']=user
@@ -172,7 +264,7 @@ class RatingViewset(viewsets.ModelViewSet):
 
 # VIEW AND POST REVIEW
 class ReviewViewset(viewsets.ModelViewSet):
-    permission_classes=[IsAuthenticated]
+    
     serializer_class=ReviewSerializer
 
     def get_queryset(self):
@@ -181,10 +273,9 @@ class ReviewViewset(viewsets.ModelViewSet):
         queryset=Review.objects.filter(recipe=recipe_id)
         return queryset
 
-    
+
+    @permission_classes([IsAuthenticated])
     def create(self, request, *args, **kwargs):
-        # if not request.user.is_authenticated:
-        #     return Response({'error':"user is not authenticated"})
         serializer=ReviewSerializer(data=request.data)
         user=request.user.id
         request.data['user']=user
@@ -194,11 +285,10 @@ class ReviewViewset(viewsets.ModelViewSet):
         else:
             return Response(serializer.errors,status=status.HTTP_406_NOT_ACCEPTABLE)
 
-
-
 # VIEW AND POST FAVOURITE
 class FavouriteViewset(viewsets.ModelViewSet):
     permission_classes=[IsAuthenticated]
+    
     serializer_class=FavouriteSerializer
 
     def get_queryset(self):
@@ -211,17 +301,19 @@ class FavouriteViewset(viewsets.ModelViewSet):
         serializer=FavouriteSerializer(data=request.data)
         user=request.user.id
         request.data['user']=user
+        print(request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response({"msg":"Added to favourite"})
+            return Response({"msg":"Added to favourite"},status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors)
 
-
 class RecipeStepViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
-    queryset = RecipeStep.objects.all()
     serializer_class = RecipeStepSerializer
+
+    def get_queryset(self):
+        recipe_id = self.request.query_params.get("recipe")
+        return RecipeStep.objects.filter(recipe_name=recipe_id)
 
     def create(self, request, *args, **kwargs):
         data = request.data.get('items', request.data)
@@ -229,8 +321,8 @@ class RecipeStepViewSet(viewsets.ModelViewSet):
         userId=self.request.user
        
         for i in data:
-            r=i.get("recipe_name")
-            recipe=Recipe.objects.get(id=r)
+            recipe_name=i.get("recipe_name")
+            recipe=Recipe.objects.get(id=recipe_name)
         
             if recipe.author!=userId:
                 return Response({"error":"you are not allowed"})
@@ -244,7 +336,6 @@ class RecipeStepViewSet(viewsets.ModelViewSet):
             return Response({"msg": "added all", "data": serialized_data}, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class RecipeImageViewSet(viewsets.ModelViewSet):
     serializer_class = RecipeImageSerializer
@@ -279,7 +370,6 @@ class RecipeImageViewSet(viewsets.ModelViewSet):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 class SearchViewSet(generics.ListAPIView):
     serializer_class = RecipeSerializer
 
@@ -287,10 +377,29 @@ class SearchViewSet(generics.ListAPIView):
         query = self.request.data.get('query', '')  
         if not isinstance(query, list):
             query = [query]
-
+        print(query)
         # Use icontains to perform case-insensitive substring matching
         object_list = list(set(Recipe.objects.filter(Q(title__icontains=query[0]) | Q(tags__name__icontains=query[0]) | Q(ingredients__name__icontains=query[0])).order_by('-id')))
         
         return object_list
 
+class RecipeListByCategory(ListAPIView):
+    serializer_class = RecipeSerializer
+
+    def get_queryset(self):
+        category_name = self.kwargs.get('category_name')
+        return Recipe.objects.filter(category_name=category_name)
     
+class RecommendationViewSet(APIView):
+    permission_classes=[IsAuthenticated]
+    def get(self, request):
+        user_id = request.user.id
+        recommended_recipe_ids = recommend_recipes(user_id)  
+
+        recommended_recipes = []
+        for recipe_id in recommended_recipe_ids:
+            recipe = Recipe.objects.get(id=recipe_id)  
+            serialized_recipe = RecipeSerializer(recipe).data  
+            recommended_recipes.append(serialized_recipe)
+
+        return Response(recommended_recipes, status=status.HTTP_200_OK)

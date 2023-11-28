@@ -28,33 +28,45 @@ class UserLoginSerializer(serializers.HyperlinkedModelSerializer):
         model=User
         fields=["email",'password']
 
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True)
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model=User
-        fields=['email','full_name','gender']
+        fields=["id","full_name","email","country","gender","created_at"]
 
 class RecipeStepSerializer(serializers.ModelSerializer):
     class Meta:
         model=RecipeStep
         fields="__all__"
 
-
 class RecipeImageSerializer(serializers.ModelSerializer):
     class Meta:
         model=RecipeImage
         fields="__all__"
-
-
 
 class RecipeSerializer(serializers.ModelSerializer):
     
     ingredient_names = serializers.SerializerMethodField()
     tags_name=serializers.SerializerMethodField()
     author_name=serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+    category_name=serializers.SerializerMethodField()
+    
     class Meta:
         model=Recipe
-        fields=["id","title","ingredient_names","cooking_time","description","difficulty_level","author","tags_name","author_name"]
+        fields=["id","title","category","category_name","tags","ingredients","ingredient_names","cooking_time","description","servings","difficulty_level","author","tags_name","author_name","average_rating","image","image_url"]
 
+    
+    
+    def get_category_name(self,obj):
+        return obj.category.name
+    def get_image_url(self, obj):
+        if 'request' in self.context:
+            return self.context['request'].build_absolute_uri(obj.image.image.url) 
+        return None
     def get_tags_name(self,obj):
         return [tags.name for tags in obj.tags.all()]
 
@@ -63,30 +75,10 @@ class RecipeSerializer(serializers.ModelSerializer):
 
     def get_author_name(self, obj):
         return obj.author.full_name
-
-    def validate(self, attrs):
-        title=attrs.get('title')
-        difficultyLevel=attrs.get('difficulty_level')
-        tags=attrs.get("tags")
-        category=attrs.get('category')
-        ingredients=attrs.get('ingredients')
-        description=attrs.get('description')
-
-        if title is None:
-            return serializers.ValidationError("Recipe Title is required")
-        elif difficultyLevel is None: 
-            return serializers.ValidationError("Difficulty level is required")
     
-        elif category is None:
-            return serializers.ValidationError("Category is required")
-        elif ingredients is None:
-            return serializers.ValidationError("Ingredients is required")
-        elif description is None:
-            return serializers.ValidationError("Description is required")
-        elif tags is None:
-            return serializers.ValidationError("Tags are required")
-        else:
-            return attrs
+
+    
+
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -94,20 +86,50 @@ class CategorySerializer(serializers.ModelSerializer):
         fields="__all__"
 
 class RatingSerializer(serializers.ModelSerializer):
+    author_name=serializers.SerializerMethodField()
     class Meta:
         model=Rating
-        fields="__all__"
+        fields=['recipe','user','author_name','rating']
+    
+    def get_author_name(self, obj):
+        return obj.user.full_name
 
 class ReviewSerializer(serializers.ModelSerializer):
+    author_name=serializers.SerializerMethodField()
+    created_at_date = serializers.SerializerMethodField()
     class Meta:
         model=Review
-        fields="__all__"
+        fields=['recipe','user','author_name','content','created_at_date']
+    
+    def get_author_name(self, obj):
+        return obj.user.full_name
+    
+    def get_created_at_date(self, obj):
+        return obj.created_at.date()
+    
+   
 
 class FavouriteSerializer(serializers.ModelSerializer):
+    author_name=serializers.SerializerMethodField()
+    recipe_title=serializers.SerializerMethodField()
+    recipe_ingredients=serializers.SerializerMethodField()
+    recipe_image_url=serializers.SerializerMethodField()
+    recipe_cooking_time=serializers.SerializerMethodField()
     class Meta:
         model=Favourite
-        fields="__all__"  
-
+        fields=['id','recipe','author_name','recipe_title','recipe_cooking_time','recipe_ingredients','recipe_image_url']  
+    def get_author_name(self, obj):
+        return obj.recipe.author.full_name
+    def get_recipe_title(self,obj):
+        return obj.recipe.title
+    def get_recipe_ingredients(self,obj):
+        return obj.recipe.ingredients.count()
+    def get_recipe_cooking_time(self,obj):
+        return obj.recipe.cooking_time
+    def get_recipe_image_url(self,obj):
+        if 'request' in self.context:
+            return self.context['request'].build_absolute_uri(obj.recipe.image.image.url) 
+        return None
 class IngredientSerializer(serializers.ModelSerializer):
     class Meta:
         model=Ingredient
@@ -118,10 +140,9 @@ class IngredientSerializer(serializers.ModelSerializer):
         filterName=Ingredient.objects.filter(name);
         if filterName is not None:
             return serializers.ValidationError("Ingredient already exists");
-
-
         
 class TagSerializer(serializers.ModelSerializer):
     class meta:
         model=Tag
         fields="__all__"
+

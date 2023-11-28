@@ -75,7 +75,8 @@ class Category(models.Model):
 
 class Ingredient(models.Model):
     name = models.CharField(max_length=100,unique=True)
-
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
     def __str__(self):
         return self.name
     
@@ -91,6 +92,12 @@ class Ingredient(models.Model):
         else:
             return super(Ingredient, self).pre_save(model_instance, add)
         
+
+class RecipeImage(models.Model):
+    image = models.ImageField(upload_to='recipe_images/')
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
+    
 class Recipe(models.Model):
     title = models.CharField(max_length=200)
     description = models.CharField(max_length=1000,default=' ')
@@ -100,18 +107,22 @@ class Recipe(models.Model):
     cooking_time = models.PositiveIntegerField()
     difficulty_level = models.CharField(max_length=100)
     tags = models.ManyToManyField('Tag')
+    servings= models.IntegerField(default=1)
     average_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
-    
+    image = models.OneToOneField(RecipeImage, on_delete=models.CASCADE,null=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
     
     def __str__(self):
         return self.title
 
 class RecipeStep(models.Model):
     recipe_name = models.ForeignKey(Recipe, on_delete=models.CASCADE)
-    step_number = models.IntegerField(unique=True)
+    step_number = models.IntegerField()
     description = models.TextField()
     time_in_minutes = models.PositiveIntegerField()
-
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
     def __str__(self) -> str:
         return self.recipe_name.title
 
@@ -125,24 +136,22 @@ class Rating(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     rating = models.DecimalField(max_digits=2, decimal_places=1)
-
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
 class Review(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     content = models.TextField()
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
 
 class Favourite(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
     def __str__(self):
         return f"{self.user} - {self.recipe}"
 
-class RecipeImage(models.Model):
-    recipe = models.OneToOneField(Recipe, on_delete=models.CASCADE)
-    image = models.ImageField(upload_to='recipe_images/')
-
-    def __str__(self):
-        return self.recipe.title
 
 
