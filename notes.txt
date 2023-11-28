@@ -1,0 +1,53 @@
+food recipe [ name, description, author, category, ingredients, instructions, cooking time, steps]
+ingredients [ name ],
+recipe properties [ total cooking time, no of ingredients, difficulty(beginner, intermediate, professional), recipe]
+user [ name, email, phone, photo, user type (beginner, intermediate, pro), veg or non-veg  ]
+
+rating and review [ rating, comments ]
+category,
+favourites [ recipe id, user id ]
+recipe images [ recipe id, image ]
+
+Todo
+
+user registration   (done)
+login and authentication    (done)
+profile     (done)
+view Recipes    (done)
+
+
+post Recipes:
+    select category - done
+    enter ingredients - done
+    enter other recipe info- done
+    image- 
+
+give review and rating 
+add favourites
+logout
+algorithm
+
+urls and their response
+
+/api/recipe - all Recipes  (done)
+/api/category - all Category  (done)
+/api/register - user registration   (done)
+/api/login - user login  (done)
+/api/logout - user logout  (done)
+/api/profile - logged in user profile   (done)
+/api/post-recipe - post recipe   (done)
+/api/post-recipe-steps - post recipe steps  (done)
+/api/post-recipe-image  -  post recipe image   (done) but cannot update yet
+/api/search/ - search recipes (done)
+/api/rating - all rating of single recipe  (done)
+/api/review - all Review of single recipe (done)
+/api/recipe-step - recipe steps of recipe  
+/api/favourite - favourites of user  (done)
+
+
+
+
+
+
+
+
