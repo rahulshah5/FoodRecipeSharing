@@ -1,14 +1,14 @@
 {
     "builds": [
       {
-        "src": "FoodRecipeSharingApp/wsgi.py",
+        "src": "FoodRecipeSharing/wsgi.py",
         "use": "@vercel/python"
       }
     ],
     "routes": [
       {
         "src": "/(.*)",
-        "dest": "FoodRecipeSharingApp/wsgi.py"
+        "dest": "FoodRecipeSharing/wsgi.py"
       }
     ]
 }

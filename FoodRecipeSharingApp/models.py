@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 from django.db import models
-
+from django.db.models import Avg
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, full_name,gender, country,password=None,password2=None):
@@ -115,6 +115,12 @@ class Recipe(models.Model):
     
     def __str__(self):
         return self.title
+    
+    def update_average_rating(self):
+        average_rating = Rating.objects.filter(recipe=self).aggregate(Avg('rating'))['rating__avg']
+        if average_rating is not None:
+            self.average_rating = round(average_rating, 2)
+            self.save()
 
 class RecipeStep(models.Model):
     recipe_name = models.ForeignKey(Recipe, on_delete=models.CASCADE)
@@ -136,8 +142,12 @@ class Rating(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     rating = models.DecimalField(max_digits=2, decimal_places=1)
+    country=models.CharField(max_length=50,null=True)
     created_at=models.DateTimeField(auto_now_add=True)
     updated_at=models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('recipe', 'user')
 class Review(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -145,11 +155,18 @@ class Review(models.Model):
     created_at=models.DateTimeField(auto_now_add=True)
     updated_at=models.DateTimeField(auto_now=True)
 
+    class Meta:
+        unique_together = ('recipe', 'user')
+
 class Favourite(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at=models.DateTimeField(auto_now_add=True)
     updated_at=models.DateTimeField(auto_now=True)
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['recipe', 'user'], name='unique_recipe_user')
+        ]
     def __str__(self):
         return f"{self.user} - {self.recipe}"
 

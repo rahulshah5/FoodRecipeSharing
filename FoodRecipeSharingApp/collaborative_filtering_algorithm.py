@@ -1,45 +1,73 @@
-from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-from FoodRecipeSharingApp.models import Rating,Recipe
-def get_recipe_ratings():
-    # Fetch all recipes and ratings from the database
-    recipes = Recipe.objects.all()
-    ratings = Rating.objects.all()
+from sklearn.metrics.pairwise import cosine_similarity
+from .models import *
 
-    # Create a matrix to store ratings
-    num_recipes = Recipe.objects.count()  # Get the count of recipes
-    num_users = Rating.objects.values_list('user_id', flat=True).distinct().count()  # Get the count of distinct users
+def get_user_ratings(user):
+    return Rating.objects.filter(user=user).select_related('recipe')
 
-    # Initialize the matrix with -1 indicating missing ratings
+def get_user_favorites(user):
+    return Favourite.objects.filter(user=user).select_related('recipe')
+
+
+def generate_ratings_matrix(users, recipes):
+    num_users = len(users)
+    num_recipes = len(recipes)
     ratings_matrix = np.full((num_users, num_recipes), -1)
 
-    # Create a dictionary to map recipe IDs to matrix indices
+    user_id_map = {user.id: index for index, user in enumerate(users)}
     recipe_id_map = {recipe.id: index for index, recipe in enumerate(recipes)}
 
-    # Fill the matrix with ratings
-    for rating in ratings:
-        user_index = rating.user_id - 1  # Assuming user_id starts from 1
-        recipe_index = recipe_id_map.get(rating.recipe_id)
-        if recipe_index is not None and user_index < num_users:
-            ratings_matrix[user_index, recipe_index] = rating.rating
+    for user in users:
+        user_ratings = get_user_ratings(user)
+        user_favorites = get_user_favorites(user)
+
+        for rating in user_ratings:
+            recipe_index = recipe_id_map.get(rating.recipe.id)
+            if recipe_index is not None:
+                ratings_matrix[user_id_map[user.id], recipe_index] = rating.rating
+
+        for favorite in user_favorites:
+            recipe_index = recipe_id_map.get(favorite.recipe.id)
+            if recipe_index is not None:
+                ratings_matrix[user_id_map[user.id], recipe_index] = 1  
 
     return ratings_matrix
 
+def recommend_recipes(user_id, users, recipes, num_recommendations=4):
+    user_index = user_id - 1 
+    ratings_matrix = generate_ratings_matrix(users, recipes)
+    user_similarity = cosine_similarity(ratings_matrix)
 
-ratings_matrix = get_recipe_ratings()
-user_similarity = cosine_similarity(ratings_matrix)
+    num_users = len(users)
+    if user_index >= num_users:
+        return []
 
-def recommend_recipes(user_id, num_recommendations=5):
-    user_ratings = ratings_matrix[user_id - 1]  # Assuming user_id starts from 1
-    similar_users = np.argsort(user_similarity[user_id - 1])[::-1][1:]
+    similar_users = np.argsort(user_similarity[user_index])[::-1][1:]
+    num_similar_users = len(similar_users)
+    if num_similar_users == 0:
+        return []
 
-    unrated_recipes = [i for i, rating in enumerate(user_ratings) if rating == 0]
+    user_favorites = get_user_favorites(users[user_index])
+    unrated_recipes = [recipe for recipe in recipes if recipe not in [fav.recipe for fav in user_favorites]]
 
+    recipes_list = list(recipes)  
     recommendations = []
-    for recipe_id in unrated_recipes:
-        similar_ratings = [ratings_matrix[similar_user][recipe_id] for similar_user in similar_users]
-        avg_rating = np.mean(similar_ratings)
-        recommendations.append((recipe_id, avg_rating))
+    for recipe in unrated_recipes:
+        recipe_index = recipes_list.index(recipe)
+        similar_ratings = [ratings_matrix[similar_user][recipe_index] for similar_user in similar_users if similar_user < num_users]
+        rated_similar_ratings = [rating for rating in similar_ratings if rating != -1]
+        if rated_similar_ratings:
+            avg_rating = np.mean(rated_similar_ratings)
+            recommendations.append((recipe, avg_rating))
 
     recommendations.sort(key=lambda x: x[1], reverse=True)
-    return recommendations[:num_recommendations]
+    return [recipe for recipe, _ in recommendations[:num_recommendations]]
+
+def get_recommended_recipes(user_id):
+    users = User.objects.all()
+    recipes = Recipe.objects.all()
+    recommended_recipes = recommend_recipes(user_id, users, recipes)
+    for recipe in recommended_recipes:
+        print(f"- {recipe.title}")
+
+    return recommended_recipes

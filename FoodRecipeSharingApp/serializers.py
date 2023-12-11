@@ -89,11 +89,11 @@ class RatingSerializer(serializers.ModelSerializer):
     author_name=serializers.SerializerMethodField()
     class Meta:
         model=Rating
-        fields=['recipe','user','author_name','rating']
+        fields=['recipe','user','author_name','rating','country']
     
     def get_author_name(self, obj):
         return obj.user.full_name
-
+  
 class ReviewSerializer(serializers.ModelSerializer):
     author_name=serializers.SerializerMethodField()
     created_at_date = serializers.SerializerMethodField()
@@ -117,7 +117,7 @@ class FavouriteSerializer(serializers.ModelSerializer):
     recipe_cooking_time=serializers.SerializerMethodField()
     class Meta:
         model=Favourite
-        fields=['id','recipe','author_name','recipe_title','recipe_cooking_time','recipe_ingredients','recipe_image_url']  
+        fields=['id','recipe','user','author_name','recipe_title','recipe_cooking_time','recipe_ingredients','recipe_image_url']  
     def get_author_name(self, obj):
         return obj.recipe.author.full_name
     def get_recipe_title(self,obj):

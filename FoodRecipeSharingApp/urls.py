@@ -14,6 +14,9 @@ router.register(r'review',ReviewViewset,basename="review")
 router.register(r'favourite',FavouriteViewset,basename='favourite')
 router.register(r'post-recipe-steps',RecipeStepViewSet,basename="post-recipe-steps")
 router.register(r'post-recipe-image',RecipeImageViewSet,basename="post-recipe-images")
+router.register(r'get-high-rated-recipes',HighRatedRecipes,basename="get high rated recipes")
+router.register(r'recommendation',RecommendationViewSet,basename="recommendations")
+router.register(r'similar-recipes',SimilarRecipes,basename="similar recipes")
 
 
 urlpatterns = [
@@ -24,11 +27,11 @@ urlpatterns = [
     path('logout/',UserLogoutView.as_view(),name='logout'),
     path('change-password/',ChangePasswordView.as_view(),name='change password'),
     path('profile/',UserProfileView.as_view(),name="profile"),
-    path('recommendation/',RecommendationViewSet.as_view(),name="recommendation"),
     path('post-recipe/',RecipePostView.as_view(),name="Post-Recipe"),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('categories/<str:category_name>/', RecipeListByCategory.as_view(), name='recipe-list-by-category'),
+    path('get-high-rated-recipes/',HighRatedRecipes.as_view({'get': 'list'}),name='get high rated recipes')
 ]
 
 urlpatterns += router.urls

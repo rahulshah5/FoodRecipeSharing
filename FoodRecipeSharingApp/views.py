@@ -16,7 +16,9 @@ from rest_framework.parsers import MultiPartParser
 from django.http import QueryDict
 from rest_framework import viewsets
 from rest_framework.filters import SearchFilter
-from .collaborative_filtering_algorithm import recommend_recipes
+from django.db.models import Avg
+from .collaborative_filtering_algorithm import get_recommended_recipes
+from django.db.models import F
 
 User = get_user_model()
 
@@ -72,9 +74,10 @@ class UserLoginViewSet(APIView):
 class UserLogoutView(APIView):
     renderer_classes=[UserRenderer]
     
+ 
     def post(self, request):
         # Get the refresh token from the request headers
-        refresh_token = request.META.get('HTTP_AUTHORIZATION').split(' ')[1]
+        refresh_token = request.headers.get('AUTHORIZATION').split(' ')[1]
         print('token')
         print(refresh_token)
         if refresh_token:
@@ -89,12 +92,12 @@ class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
 
     
-    def post(self, request, *args, **kwargs):
+    def patch(self, request, *args, **kwargs):
         serializer = ChangePasswordSerializer(data=request.data)
         if serializer.is_valid():
             user = request.user
-            old_password = serializer.validated_data.get('oldpassword')
-            new_password = serializer.validated_data.get('password')
+            old_password = request.data['old_password']
+            new_password = request.data['new_password']
 
             # Check if the old password matches
             if not user.check_password(old_password):
@@ -241,14 +244,36 @@ class CategoryViewset(viewsets.ModelViewSet):
 
 # VIEW AND POST RATING
 class RatingViewset(viewsets.ModelViewSet):
-    
-    serializer_class=RatingSerializer
+    serializer_class = RatingSerializer
 
     def get_queryset(self):
-        #  /api/ratings/?recipe=<recipe_id>
+        user_country = self.request.query_params.get('country')
         recipe_id = self.request.query_params.get('recipe')
-        queryset = Rating.objects.filter(recipe_id=recipe_id)
+        
+        if user_country == "ALL":
+            queryset = Rating.objects.filter(recipe=recipe_id)
+        else:
+            queryset = Rating.objects.all().filter(recipe_id=recipe_id, user__country=user_country)
+        
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        recipe_id = self.request.query_params.get('recipe')
+
+        # Calculate average rating for the recipe
+        avg_rating = queryset.aggregate(Avg('rating'))['rating__avg']
+        
+        # Serialize queryset
+        serializer = self.get_serializer(queryset, many=True)
+        
+        # Create response data
+        response_data = {
+            'ratings': serializer.data,
+            'average_rating': avg_rating if avg_rating else 0.0,  # Set to 0 if no ratings found
+        }
+
+        return Response(response_data)
     
     @permission_classes([IsAuthenticated])
     def create(self, request, *args, **kwargs):
@@ -256,11 +281,16 @@ class RatingViewset(viewsets.ModelViewSet):
         serializer=RatingSerializer(data=request.data)
         user=request.user.id
         request.data['user']=user
+        country=request.data['country']
+        request.data['country']=country.upper()
         if serializer.is_valid():
             instance=serializer.save()
+            recipe_instance = Recipe.objects.get(id=request.data['recipe'])
+            recipe_instance.update_average_rating()
+
             return Response({'msg':'created',"data":RatingSerializer(instance).data},status=status.HTTP_201_CREATED)
         else:
-            return Response(serializer.errors,status=status.HTTP_406_NOT_ACCEPTABLE)
+            return Response(serializer.errors)
 
 # VIEW AND POST REVIEW
 class ReviewViewset(viewsets.ModelViewSet):
@@ -269,8 +299,12 @@ class ReviewViewset(viewsets.ModelViewSet):
 
     def get_queryset(self):
          #  /api/reveiw/?recipe=<recipe_id>
-        recipe_id=self.request.query_params.get('recipe')
-        queryset=Review.objects.filter(recipe=recipe_id)
+        user_country = self.request.query_params.get('country')
+        recipe_id = self.request.query_params.get('recipe')
+        if user_country=="ALL":
+            queryset= Review.objects.filter(recipe=recipe_id)
+        else:
+            queryset=Review.objects.all().filter(recipe=recipe_id,user__country=user_country)
         return queryset
 
 
@@ -286,27 +320,32 @@ class ReviewViewset(viewsets.ModelViewSet):
             return Response(serializer.errors,status=status.HTTP_406_NOT_ACCEPTABLE)
 
 # VIEW AND POST FAVOURITE
+
 class FavouriteViewset(viewsets.ModelViewSet):
-    permission_classes=[IsAuthenticated]
-    
-    serializer_class=FavouriteSerializer
+    permission_classes = [IsAuthenticated]
+    serializer_class = FavouriteSerializer
 
     def get_queryset(self):
-        user=self.request.user
-        query=Favourite.objects.filter(user=user)
-        return query
-    
-    
+        user = self.request.user
+        return Favourite.objects.filter(user=user)
+
+
     def create(self, request, *args, **kwargs):
-        serializer=FavouriteSerializer(data=request.data)
-        user=request.user.id
-        request.data['user']=user
-        print(request.data)
+        serializer = FavouriteSerializer(data=request.data)
+        userid = request.user.id
+        recipe_id = request.data.get('recipe')
+        request.data['user']=userid
+        existing_favorite = Favourite.objects.filter(user=userid, recipe_id=recipe_id).first()
+
+        if existing_favorite:
+            return Response({"msg": "This recipe is already in your favorites."}, status=status.HTTP_400_BAD_REQUEST)
+
         if serializer.is_valid():
             serializer.save()
-            return Response({"msg":"Added to favourite"},status=status.HTTP_201_CREATED)
+            return Response({"msg": "Added to favorites"}, status=status.HTTP_201_CREATED)
         else:
-            return Response(serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class RecipeStepViewSet(viewsets.ModelViewSet):
     serializer_class = RecipeStepSerializer
@@ -390,16 +429,52 @@ class RecipeListByCategory(ListAPIView):
         category_name = self.kwargs.get('category_name')
         return Recipe.objects.filter(category_name=category_name)
     
-class RecommendationViewSet(APIView):
-    permission_classes=[IsAuthenticated]
-    def get(self, request):
+class RecommendationViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = RecipeSerializer
+    queryset = Recipe.objects.all()
+
+    def list(self, request):
         user_id = request.user.id
-        recommended_recipe_ids = recommend_recipes(user_id)  
+        recommended_recipes = get_recommended_recipes(user_id)
 
-        recommended_recipes = []
-        for recipe_id in recommended_recipe_ids:
-            recipe = Recipe.objects.get(id=recipe_id)  
-            serialized_recipe = RecipeSerializer(recipe).data  
-            recommended_recipes.append(serialized_recipe)
+        serialized_recipes = self.get_serializer(recommended_recipes, many=True)
+        return Response(serialized_recipes.data, status=status.HTTP_200_OK)
 
-        return Response(recommended_recipes, status=status.HTTP_200_OK)
+
+class HighRatedRecipes(viewsets.ModelViewSet):
+    serializer_class = RecipeSerializer
+    allowed_methods = ['get']
+
+    def get_queryset(self):
+        country = self.request.query_params.get('country')
+        
+        if country!="all":
+            country = country.upper()
+            users = User.objects.filter(country=country)
+            ratings = Rating.objects.filter(user__in=users)
+            recipes_with_avg_ratings = (
+                Recipe.objects.filter(id__in=ratings.values_list('recipe', flat=True))
+                .annotate(avg_rating=Avg('rating__rating'))
+                .order_by('-avg_rating')[:2]
+            )
+            if recipes_with_avg_ratings.exists() :
+                return recipes_with_avg_ratings
+            else:
+                return Recipe.objects.all().order_by('-average_rating')[:2]
+        else:
+            return Recipe.objects.all().order_by('-average_rating')[:2]
+
+
+class SimilarRecipes(viewsets.ModelViewSet):
+    serializer_class = RecipeSerializer
+    allowed_methods = ['get']
+
+    def get_queryset(self):
+        recipe_id = self.request.query_params.get('recipe_id')
+        ingredients = Recipe.objects.filter(id=recipe_id).values_list('ingredients__name', flat=True)
+        similar_recipes = Recipe.objects.filter(ingredients__name__in=ingredients).exclude(id=recipe_id).distinct()
+        return similar_recipes
+
+            
+            
