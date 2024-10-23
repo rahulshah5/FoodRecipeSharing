@@ -436,6 +436,8 @@ class RecommendationViewSet(viewsets.ModelViewSet):
 
     def list(self, request):
         user_id = request.user.id
+        if not user_id:
+            return Response([], status=status.HTTP_200_OK)
         recommended_recipes = get_recommended_recipes(user_id)
 
         serialized_recipes = self.get_serializer(recommended_recipes, many=True)
